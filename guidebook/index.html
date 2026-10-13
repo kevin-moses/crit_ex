@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Masks For Our Digital Lives</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <div class="layout">
+        <main class="guide">
+
+            <header class="guide-title">
+                <h1>Masks for Our Digital Lives</h1>
+            </header>
+
+            <section id="intro" data-effect="redact">
+                <h2>Introduction</h2>
+                <p>The internet has evolved from a small network of static webpages to the defining way humans and machines communicate today.</p>
+                <p>The past decade has shown how digital systems on the net can be hostile to humans. Many organizations and several researchers have <a href="https://academic.oup.com/cybersecurity/article/4/1/tyy006/5133288">defined taxonomies</a> categorizing different types of cyber harms spanning social, physical, digital, economic, psychological, and reputational effects.</p>
+                <p>The potential for increasingly common and severe cyber harm to humans has risen dramatically with AI technology. <a href="https://arxiv.org/pdf/2607.09970">Harvard SEAS researchers</a> shows new AI voice phishing attacks were over 16% effective (double that for phishing scams with a relative in distress), and the <a href="https://www.fbi.gov/news/press-releases/cryptocurrency-and-ai-scams-bilk-americans-of-billions">FBI has seen tens of thousands of complaints</a> regarding AI scams, estimated at ~$893 million in losses last year.</p>
+                <p>According to Axios, a hacker from China allegedly used AI tools from China-developed models, including DeepSeek, to steal data from tens of thousands of bank customers. The attacker used Claude Code to ask for help finding places to sell the stolen data, according to cybersecurity firm CrowdStrike.</p>
+                <p>This guide functions as a usable playbook for <strong>masking</strong> your digital presence. In particular, it provides an actionable manual for the following concerns:</p>
+                <ol>
+                <li>How can I prevent digital systems from capturing and disseminating my information?</li>
+                <li>What are steps I can take <em>right now</em> to prevent future  AI agent threat actors with advanced capabilities from using said data to inflict harm on me and my loved ones?</li>
+                </ol>
+            </section>
+
+            <section id="threat-actors">
+                <h2>Threat Actors</h2>
+                <div class="threat-map"></div>
+            </section>
+
+            <section data-effect="cipher">
+                <h2>Data Masking</h2>
+                <p>Before you paste anything into a chatbot, ask where
+                that text is stored and who can read it later.</p>
+            </section>
+
+            <section data-effect="cipher">
+                <h2>Spotting Manipulation</h2>
+                <p>Generated text can sound confident and still be
+                wrong. Confidence is a style, not evidence.</p>
+            </section>
+
+            <section data-effect="cipher">
+                <h2>Staying in Control</h2>
+                <p>Keep a human decision point on anything that spends
+                money, sends a message, or deletes something.</p>
+            </section>
+
+        </main>
+
+        <aside class="sidebar">
+            <div class="sidebar-panel" data-controls="intro">
+                <div class="sidebar-label">Redaction</div>
+                <p class="sidebar-hint">Type a redacted word and press Enter to uncover it and the words around it.</p>
+                <input type="text" class="redact-guess" placeholder="Type a redacted word…" autocomplete="off" spellcheck="false" aria-label="Guess a redacted word">
+                <button type="button" class="redact-toggle" aria-pressed="false">Reveal all</button>
+            </div>
+        </aside>
+        </div>
+
+        <script type="importmap">
+        {
+            "imports": {
+                "gsap": "./node_modules/gsap/index.js",
+                "compromise": "./node_modules/compromise/builds/three/compromise-three.mjs"
+            }
+        }
+        </script>
+        <script src="./node_modules/d3/dist/d3.min.js"></script>
+        <script type="module" src="app.js"></script>
+        <script type="module" src="chart.js"></script>
+    </body>
+</html>

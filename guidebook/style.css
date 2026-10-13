@@ -1,0 +1,301 @@
+@font-face {
+    font-family: "Courier Prime";
+    src: url("Courier_Prime/CourierPrime-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Courier Prime";
+    src: url("Courier_Prime/CourierPrime-Italic.ttf") format("truetype");
+    font-weight: 400;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Courier Prime";
+    src: url("Courier_Prime/CourierPrime-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Courier Prime";
+    src: url("Courier_Prime/CourierPrime-BoldItalic.ttf") format("truetype");
+    font-weight: 700;
+    font-style: italic;
+}
+
+:root {
+    --page-bg: #8effab;
+    --page-ink: #000000;
+    --rule: rgba(0, 0, 0, 0.18);
+    --ink-dim: rgba(0, 0, 0, 0.6);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--page-bg);
+    font-family: "Courier Prime", "Courier New", monospace;
+    color: var(--page-ink);
+}
+
+a {
+    color: inherit;
+}
+
+/* Two thirds of the width for the guide, one third for top-level controls. */
+.layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 48px;
+    padding: 0 40px;
+}
+
+.guide {
+    padding: 48px 0 80px;
+    line-height: 1.6;
+}
+
+.sidebar {
+    padding-top: 48px;
+}
+
+.sidebar-panel {
+    position: sticky;
+    top: 48px;
+}
+
+.sidebar-label {
+    margin-bottom: 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.sidebar-hint {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+}
+
+@media (max-width: 800px) {
+    .layout {
+        grid-template-columns: 1fr;
+        gap: 0;
+        padding: 0 20px;
+    }
+
+    .sidebar {
+        order: -1;
+        padding-top: 24px;
+    }
+
+    .sidebar-panel {
+        position: static;
+    }
+}
+
+.guide-title h1 {
+    margin: 0 0 32px;
+    padding-bottom: 24px;
+    border-bottom: solid 1px var(--rule);
+    font-size: 210%;
+    font-weight: normal;
+    letter-spacing: 0.02em;
+}
+
+section {
+    margin-top: 40px;
+
+    h2 {
+        margin: 0 0 12px;
+        padding-bottom: 8px;
+        border-bottom: solid 1px var(--rule);
+        font-size: 100%;
+        font-weight: normal;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+}
+
+/* --- redaction --- */
+
+.redact-guess,
+.redact-toggle {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--page-bg);
+    border: solid 1px var(--page-ink);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--page-ink);
+}
+
+.redact-guess {
+    margin-bottom: 12px;
+
+    &:focus {
+        outline: solid 2px var(--page-ink);
+        outline-offset: 2px;
+    }
+}
+
+.redact-toggle {
+    cursor: pointer;
+
+    &:hover {
+        background: var(--page-ink);
+        color: var(--page-bg);
+    }
+}
+
+/* The bar is a pseudo-element; GSAP fades it by tweening --bar-opacity. */
+.redact {
+    --bar-opacity: 1;
+    position: relative;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0.1em -0.08em;
+        background: var(--redact-color);
+        opacity: var(--bar-opacity);
+        pointer-events: none;
+    }
+}
+
+/* --- cipher --- */
+
+.cipher {
+    font-family: var(--cipher-font);
+    font-size: var(--cipher-size);
+}
+
+/* The real letter stays as transparent text holding its width; the glyph is
+   drawn over it. The `/ ""` alt text keeps screen readers on the real letter. */
+.cipher-char {
+    --glyph-opacity: 1;
+    position: relative;
+    color: transparent;
+
+    &::after {
+        content: attr(data-glyph);
+        content: attr(data-glyph) / "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        text-align: center;
+        color: var(--cipher-color);
+        opacity: var(--glyph-opacity);
+    }
+}
+
+/* Headings: the same cipher, but hovering unmasks the character under the
+   pointer and its neighbours (the `unmasked` class is set from app.js). */
+.cipher-heading .cipher-char.unmasked {
+    color: inherit;
+
+    &::after {
+        visibility: hidden;
+    }
+}
+
+/* --- threat actor chart --- */
+
+.threat-map {
+    overflow-x: auto;
+
+    svg {
+        display: block;
+        width: 100%;
+        min-width: 640px;
+        height: auto;
+        color: var(--page-ink);
+        font-family: inherit;
+    }
+}
+
+.tm-rule {
+    stroke: var(--rule);
+    stroke-dasharray: 4 4;
+}
+
+.tm-tier {
+    font-size: 11px;
+    fill: var(--ink-dim);
+}
+
+.tm-hit {
+    fill: transparent;
+}
+
+.tm-axis {
+    stroke: var(--page-ink);
+    stroke-width: 1.2;
+}
+
+.tm-axis-label {
+    font-size: 12px;
+    fill: var(--page-ink);
+}
+
+.tm-edge {
+    fill: none;
+    stroke: var(--page-ink);
+    stroke-width: 1.1;
+    opacity: 0.55;
+    transition: opacity 0.2s;
+
+    &.tm-lit {
+        opacity: 1;
+        stroke-width: 1.8;
+    }
+
+    &.tm-dim {
+        opacity: 0.08;
+    }
+}
+
+.tm-node {
+    cursor: default;
+    transition: opacity 0.2s;
+    outline: none;
+
+    rect {
+        fill: var(--page-bg);
+        stroke: var(--page-ink);
+        stroke-width: 1.2;
+    }
+
+    text {
+        fill: var(--page-ink);
+    }
+
+    &.tm-aggregation rect {
+        fill: var(--page-ink);
+    }
+
+    &.tm-aggregation text {
+        fill: var(--page-bg);
+    }
+
+    &.tm-attack rect {
+        stroke-width: 3;
+    }
+
+    &.tm-attack text {
+        font-weight: 700;
+    }
+
+    &.tm-dim {
+        opacity: 0.2;
+    }
+}
