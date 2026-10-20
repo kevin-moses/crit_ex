@@ -5,6 +5,17 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Masks For Our Digital Lives</title>
         <link rel="stylesheet" href="style.css">
+        <script>
+            // Keeps the guide hidden until app.js has redacted it (see style.css), so
+            // the plain text never flashes on load. A failed script shows it anyway.
+            document.documentElement.classList.add('effects-pending');
+            addEventListener('error', (event) => {
+                // A script that fails to load, or one that throws; not a broken image.
+                if (event.target === window || event.target instanceof HTMLScriptElement) {
+                    document.documentElement.classList.remove('effects-pending');
+                }
+            }, true);
+        </script>
     </head>
     <body>
         <div class="layout">
@@ -17,8 +28,8 @@
             <section id="intro" data-effect="redact">
                 <h2>Introduction</h2>
                 <p>The internet has evolved from a small network of static webpages to the defining way humans and machines communicate today.</p>
-                <p>The past decade has shown how digital systems on the net can be hostile to humans. Many organizations and several researchers have <a href="https://academic.oup.com/cybersecurity/article/4/1/tyy006/5133288">defined taxonomies</a> categorizing different types of cyber harms spanning social, physical, digital, economic, psychological, and reputational effects.</p>
-                <p>The potential for increasingly common and severe cyber harm to humans has risen dramatically with AI technology. <a href="https://arxiv.org/pdf/2607.09970">Harvard SEAS researchers</a> shows new AI voice phishing attacks were over 16% effective (double that for phishing scams with a relative in distress), and the <a href="https://www.fbi.gov/news/press-releases/cryptocurrency-and-ai-scams-bilk-americans-of-billions">FBI has seen tens of thousands of complaints</a> regarding AI scams, estimated at ~$893 million in losses last year.</p>
+                <p>The past decade has shown how digital systems on the net can be hostile to humans. Many organizations and several researchers have <a href="https://academic.oup.com/cybersecurity/article/4/1/tyy006/5133288" target="_blank" rel="noopener noreferrer">defined taxonomies</a> categorizing different types of cyber harms spanning social, physical, digital, economic, psychological, and reputational effects.</p>
+                <p>The potential for increasingly common and severe cyber harm to humans has risen dramatically with AI technology. <a href="https://arxiv.org/pdf/2607.09970" target="_blank" rel="noopener noreferrer">Harvard SEAS researchers</a> shows new AI voice phishing attacks were over 16% effective (double that for phishing scams with a relative in distress), and the <a href="https://www.fbi.gov/news/press-releases/cryptocurrency-and-ai-scams-bilk-americans-of-billions" target="_blank" rel="noopener noreferrer">FBI has seen tens of thousands of complaints</a> regarding AI scams, estimated at ~$893 million in losses last year.</p>
                 <p>According to Axios, a hacker from China allegedly used AI tools from China-developed models, including DeepSeek, to steal data from tens of thousands of bank customers. The attacker used Claude Code to ask for help finding places to sell the stolen data, according to cybersecurity firm CrowdStrike.</p>
                 <p>This guide functions as a usable playbook for <strong>masking</strong> your digital presence. In particular, it provides an actionable manual for the following concerns:</p>
                 <ol>
@@ -32,32 +43,120 @@
                 <div class="threat-map"></div>
             </section>
 
-            <section data-effect="cipher">
+            <section id="data-leakage" data-effect="redact">
+                <h2>Data Leakage</h2>
+                <p>Most likely your information has already been leaked.</p>
+                <label class="check-item">
+                    <input type="checkbox" data-id="haveibeenpwned">
+                    <span>Check <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener noreferrer">https://haveibeenpwned.com/</a> to see if your email has already involved in a data breach.</span>
+                </label>
+                <p>In the USA, any internet use almost always leads to your data being shared with third parties.</p>
+            </section>
+
+            <section id="data-removal" data-effect="redact">
+                <h2>Data Broker Removal</h2>
+                <p>Regardless if some of your data has already been leaked, removing your information from databrokeres will  safeguard yourself for the future. </p>
+                <p> Data brokers collect your name, address history, phone numbers and relatives, then sell them to anyone, including other tech companies. This information can get into the hands of threat actors, and provides the raw material for AI scams. Malicious attackers now have an email target for phishing, and a phone target for voice-based scams.</p>
+                <p>Most brokers will delete you if you ask. The steps below combine two free guides: the <a href="https://inteltechniques.com/data/workbook.pdf" target="_blank" rel="noopener noreferrer">Personal Data Removal Workbook</a> by Michael Bazzell of IntelTechniques, and Yael Grauer’s <a href="https://github.com/yaelwrites/Big-Ass-Data-Broker-Opt-Out-List" target="_blank" rel="noopener noreferrer">Big Ass Data Broker Opt-Out List</a>, adapted under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>. Where both cover a broker, the newer steps are used. Opt-out links change often; if one is dead, look for an opt-out or privacy link on the broker’s site.</p>
+                <p>Check off a broker once you have confirmed your listing is gone. Use its notes to record when you asked and what they said back. Brokers often list people again later, so recheck every few months. Your progress is saved in this browser only.</p>
+                <p>California residents can use the state’s <a href="https://consumer.drop.privacy.ca.gov" target="_blank" rel="noopener noreferrer">Delete Request and Opt-Out Platform</a> to reach hundreds of registered brokers with one free request.</p>
+                <label class="check-item">
+                    <input type="checkbox" data-id="prep-email">
+                    <span>Create a separate email address used only for removal requests, so brokers never get your real inbox.</span>
+                </label>
+                <label class="check-item">
+                    <input type="checkbox" data-id="prep-template">
+                    <span>If an opt-out form fails, email the broker instead. Every email link below opens with this message filled in:</span>
+                </label>
+                <blockquote class="removal-template">
+                    <p>I have been unsuccessful in removing my personal information from your website. Per the information provided from your legal privacy policy, please remove the following details from your service.</p>
+                    <p>Full name, physical address, and, only if they appear on your service, telephone number and email address.</p>
+                </blockquote>
+                <form class="removal-details" aria-label="Details for removal emails">
+                    <div class="removal-details-hint">Fill these in once and every email link adds them to the message. Write them the way the brokers list you. Leave phone and email blank unless a broker shows them; you can delete lines before sending. Saved in this browser only and never sent anywhere except in the emails you choose to send.</div>
+                    <label class="wide">Full name <span class="cipher-field"><input name="name" autocomplete="name"></span></label>
+                    <label class="wide">Physical address <span class="cipher-field"><textarea name="address" rows="2" autocomplete="street-address"></textarea></span></label>
+                    <label>Phone number (optional) <span class="cipher-field"><input name="phone" type="tel" autocomplete="tel"></span></label>
+                    <label>Email address (optional) <span class="cipher-field"><input name="email" type="email" autocomplete="email"></span></label>
+                    <button type="button" class="removal-details-forget">Forget these details</button>
+                </form>
+            </section>
+
+            <section id="step-one" data-effect="redact">
+                <h2>Large Data Broker Removal</h2>
+                <p>Many smaller sites buy from these brokers, so any removals here will trickle down. Then wait about a week for them to spread before you work through the optional list at the bottom of the page.</p>
+                <div data-removals="start-biggest"></div>
+                <h3>High priority</h3>
+                <div data-removals="start-high"></div>
+            </section>
+
+            <section id="step-two" data-effect="redact">
+                <h2>Freezes &amp; Opt-Outs</h2>
+                <p>Removing listings makes you harder to find. These steps make the data that already leaked less useful, since an attacker who has your details still can’t open credit in your name, find you through a search engine, or match your face to your photos.</p>
+                <p>Notes are saved unencrypted in this browser, so never put freeze PINs or passwords in them.</p>
+                <h3>Freeze your credit</h3>
+                <p>Credit freezes prevent any new accounts or lines of credit from being opened in your name. It helps prevent identity theft and financial fraud, and is completely free. Each bureau needs your name, address, date of birth and Social Security number.</p>
+                <div data-removals="protect-credit"></div>
+                <h3>Lock your tax return</h3>
+                <div data-removals="protect-tax"></div>
+                <h3>Search engines</h3>
+                <div data-removals="protect-search"></div>
+                <h3>Face search engines</h3>
+                <p>Anyone can upload one photo of you and find the rest, which is ready source material for a deepfake. Opting out hides you from their search, not from the sites the photos are on.</p>
+                <div data-removals="protect-faces"></div>
+                <h3>Calls &amp; marketing</h3>
+                <div data-removals="protect-marketing"></div>
+                <h3>Special circumstances</h3>
+                <p>Victims of violent crime or identity theft can often remove records others can’t, sometimes with a court order. The Privacy Rights Clearinghouse keeps a fuller broker list for those cases.</p>
+                <div data-removals="protect-special"></div>
+            </section>
+
+            <section id="data-masking" data-effect="redact">
                 <h2>Data Masking</h2>
                 <p>Before you paste anything into a chatbot, ask where
                 that text is stored and who can read it later.</p>
+                <p>The same goes for everything else you hand over online. These steps cut down what you give away from now on: the trackers following your browser, the card number every shop keeps, and the location hidden in your photos.</p>
+                <h3>Browser tracking</h3>
+                <div data-removals="mask-browser"></div>
+                <h3>Payments</h3>
+                <div data-removals="mask-payments"></div>
+                <h3>Photos &amp; files</h3>
+                <div data-removals="mask-files"></div>
             </section>
 
-            <section data-effect="cipher">
-                <h2>Spotting Manipulation</h2>
-                <p>Generated text can sound confident and still be
-                wrong. Confidence is a style, not evidence.</p>
-            </section>
-
-            <section data-effect="cipher">
-                <h2>Staying in Control</h2>
-                <p>Keep a human decision point on anything that spends
-                money, sends a message, or deletes something.</p>
+            <section id="optional" data-effect="redact">
+                <h2>Optional: Every Other Broker</h2>
+                <p>Thorough, but optional. Start with the sites that share an opt-out with Step One, then open whichever categories matter to you. Search each site for your name first and skip any that don’t list you. Opt-outs can take weeks, and some sites pull your data back in from other sources, so you may need to repeat them.</p>
+                <div data-removals="rest"></div>
             </section>
 
         </main>
 
         <aside class="sidebar">
-            <div class="sidebar-panel" data-controls="intro">
+            <div class="sidebar-sticky">
+            <div class="sidebar-panel" data-controls="redaction">
                 <div class="sidebar-label">Redaction</div>
                 <p class="sidebar-hint">Type a redacted word and press Enter to uncover it and the words around it.</p>
                 <input type="text" class="redact-guess" placeholder="Type a redacted word…" autocomplete="off" spellcheck="false" aria-label="Guess a redacted word">
-                <button type="button" class="redact-toggle" aria-pressed="false">Reveal all</button>
+                <dl class="redact-stats">
+                    <div><dt>Guesses</dt><dd data-stat="tries">0</dd></div>
+                    <div><dt>Correct</dt><dd data-stat="correct">0</dd></div>
+                    <div><dt>Redactions left</dt><dd data-stat="left">…</dd></div>
+                    <div><dt>Uncovered</dt><dd data-stat="progress">…</dd></div>
+                </dl>
+                <div class="redact-meter" aria-hidden="true"><div class="redact-meter-fill"></div></div>
+                <!-- app.js shows this after enough guesses -->
+                <button type="button" class="redact-toggle" aria-pressed="false" hidden>Reveal all</button>
+            </div>
+
+            <div class="sidebar-panel">
+                <div class="sidebar-label">Removal Progress</div>
+                <p class="sidebar-hint">Saved in this browser only.</p>
+                <a class="progress-row" href="#step-one"><span>1. Biggest brokers</span><span data-count="start-biggest start-high"></span></a>
+                <a class="progress-row" href="#step-two"><span>2. Freezes &amp; opt-outs</span><span data-count="protect-credit protect-tax protect-search protect-faces protect-marketing"></span></a>
+                <a class="progress-row" href="#data-masking"><span>3. Data masking</span><span data-count="mask-browser mask-payments mask-files"></span></a>
+                <a class="progress-row" href="#optional"><span>Optional brokers</span><span data-count="rest"></span></a>
+            </div>
             </div>
         </aside>
         </div>

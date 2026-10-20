@@ -1,7 +1,7 @@
 // Threat-actor flow chart: data sources -> aggregation -> attacks, drawn with d3.
 // Edit NODES / LINKS below to change the diagram; layout is computed from them.
 import { gsap } from 'gsap';
-import { CIPHER, randomGlyph } from './app.js';
+import { CIPHER, linger, randomGlyph } from './app.js';
 
 const d3 = window.d3;
 
@@ -135,11 +135,21 @@ function cipherText(parent, lines, { x, y, size, lineHeight = size * 1.3, anchor
             cipherChars.push(record);
         });
     });
+    const show = (on) => {
+        for (const c of chars) {
+            c.revealed = on;
+            c.el.text(on ? c.ch : randomGlyph()).attr('opacity', 1);
+        }
+    };
+    // The text stays readable for a moment after the pointer leaves.
+    const hide = linger(() => show(false));
     return {
         reveal(on) {
-            for (const c of chars) {
-                c.revealed = on;
-                c.el.text(on ? c.ch : randomGlyph()).attr('opacity', 1);
+            if (on) {
+                hide.cancel();
+                show(true);
+            } else {
+                hide.leave();
             }
         }
     };

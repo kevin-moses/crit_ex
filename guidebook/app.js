@@ -1,5 +1,6 @@
 import { gsap } from 'gsap';
 import nlp from 'compromise';
+import { setupChecklists, redaction, save } from './checklist.js';
 
 // --- tuning ------------------------------------------------------------------
 
@@ -14,7 +15,10 @@ const REDACT = {
     stagger: 0.015,        // delay between one bar and the next (s)
     order: 'start',        // which bar goes first: 'start' | 'end' | 'center' | 'edges' | 'random'
     ease: 'power2.out',    // any GSAP ease: https://gsap.com/docs/v3/Eases
-    context: 4             // redacted words revealed on each side of a guessed word
+    context: 6,            // redacted words revealed on each side of a guessed word
+    revealAfter: 10,       // guesses before the "Reveal all" button appears
+    fieldStagger: 0.04,    // time between one character and the next when a form field is enciphered (s)
+    unlockShare: 0.5       // share of a checkbox item's redacted text (by characters) to uncover before it can be checked
 };
 
 export const CIPHER = {
@@ -30,7 +34,8 @@ export const CIPHER = {
     offsetRandom: 0.3,     // extra random phase per character (s); breaks the wave up
     flash: 0.25,           // fade-in time of a new glyph (s); 0 = instant swap
     flashFrom: 0.2,        // opacity a new glyph fades in from
-    hoverRadius: 1         // headings: characters unmasked each side of the hovered one
+    hoverRadius: 1,        // headings: characters unmasked each side of the hovered one
+    hoverLinger: 0.5       // time unmasked text stays readable after the pointer moves off it (s)
 };
 
 // --- word wrapping -----------------------------------------------------------
@@ -80,22 +85,173 @@ function wrapSection(section, className) {
 
 // --- redaction ---------------------------------------------------------------
 
-function setupRedact(section) {
-    const words = wrapSection(section, 'redact');
-    section.style.setProperty('--redact-color', REDACT.color);
+// The elements redaction works in: each is tagged on its own, and a word's saved
+// key names the one it sits in.
+const BLOCK = '.check-item, p, li';
 
-    // Controls live in the sidebar, linked to this section by its id.
-    const controls = document.querySelector(`[data-controls="${section.id}"]`);
+// Wraps one redacted section and hands its words to `addWords`. Collapsed
+// broker groups hold most of the page's text, so each is wrapped once the page
+// is idle, or when first opened if that comes sooner; until then its contents
+// stay hidden (see style.css).
+function setupRedact(section, addWords) {
+    section.style.setProperty('--redact-color', REDACT.color);
+    const deferred = [...section.querySelectorAll('details.removal-group:not([open])')];
+
+    // In reading order, so `addWords` gets one contiguous stretch of the page.
+    const wrap = (root, skip = () => false) => addWords(
+        [...root.querySelectorAll(BLOCK)]
+            .filter((el) => !skip(el))
+            .flatMap((el) => (el.matches('.check-item') ? setupCheckItem(el) : wrapWords(el, 'redact')))
+    );
+    wrap(section, (el) => deferred.some((group) => group.contains(el)));
+
+    for (const group of deferred) {
+        group.classList.add('redact-pending');
+        pendingGroups++;
+        let wrapped = false;
+        const wrapGroup = () => {
+            if (wrapped) {
+                return;
+            }
+            wrapped = true;
+            pendingGroups--;
+            wrap(group);
+            group.classList.remove('redact-pending');
+            updateStats();
+        };
+        group.addEventListener('toggle', wrapGroup, { once: true });
+        whenIdle(wrapGroup);
+    }
+}
+
+const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 50));
+
+// Which words the reader has uncovered is saved (see checklist.js) and put back,
+// without animation, on the next visit. A word is keyed by the block it sits in
+// (a hash of its text, so editing one paragraph leaves the rest alone) and its
+// position there.
+const wordKeys = new WeakMap();
+const uncovered = new Set(redaction.words);
+
+function hashText(text) {
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) {
+        h = (Math.imul(h, 33) ^ text.charCodeAt(i)) >>> 0;
+    }
+    return h.toString(36);
+}
+
+function keyWords(words) {
+    const blocks = new Set(words.map((word) => word.closest(BLOCK)));
+    for (const block of blocks) {
+        const hash = hashText(block.textContent);
+        const blockWords = block.querySelectorAll('.redact');
+        blockWords.forEach((word, i) => wordKeys.set(word, `${hash}:${i}`));
+        blockCounts.set(hash, blockWords.length);
+    }
+}
+
+// Uncovered as far as the reader is concerned, even while its bar is still fading.
+const isUncovered = (word) => redaction.revealed || uncovered.has(wordKeys.get(word));
+
+// Saves the redaction state and brings everything that depends on it up to date.
+function redactionChanged() {
+    redaction.words = [...uncovered];
+    save();
+    updateLocks();
+    updateStats();
+}
+
+function rememberUncovered(words) {
+    for (const word of words) {
+        uncovered.add(wordKeys.get(word));
+    }
+    redactionChanged();
+}
+
+// One function per checkbox item that locks or unlocks its box (see setupCheckItem).
+const locks = [];
+function updateLocks() {
+    locks.forEach((update) => update());
+}
+
+// --- redaction stats ---------------------------------------------------------
+
+// Redacted words per block, by the hash in their word keys. Covers every block
+// on the page once `pendingGroups` reaches 0.
+const blockCounts = new Map();
+let pendingGroups = 0;
+
+// The sidebar's numbers. Progress counts only what the reader uncovered by
+// guessing or checking boxes, not "Reveal all".
+function updateStats() {
+    const stats = document.querySelector('.redact-stats');
+    const show = (name, value) => {
+        stats.querySelector(`[data-stat="${name}"]`).textContent = value;
+    };
+    const { tries, correct } = redaction;
+    show('tries', tries);
+    show('correct', tries ? `${correct} (${Math.round((correct / tries) * 100)}%)` : '0');
+
+    if (pendingGroups > 0) {
+        return;
+    }
+    let total = 0;
+    for (const count of blockCounts.values()) {
+        total += count;
+    }
+    // Saved keys whose paragraph has since been edited no longer count.
+    let found = 0;
+    for (const key of uncovered) {
+        const [hash, i] = key.split(':');
+        if (Number(i) < (blockCounts.get(hash) ?? 0)) {
+            found++;
+        }
+    }
+    const share = total ? found / total : 0;
+    show('left', (total - found).toLocaleString());
+    show('progress', `${(share * 100).toFixed(1)}%`);
+    gsap.to('.redact-meter-fill', { scaleX: share, duration: REDACT.duration, ease: REDACT.ease });
+}
+
+// The sidebar controls act on the redacted words of every section. Returns a
+// function that registers words as they are wrapped.
+function setupRedactControls() {
+    const words = [];
+    const controls = document.querySelector('[data-controls="redaction"]');
     const button = controls.querySelector('.redact-toggle');
-    let revealed = false;
+
+    const showRevealed = () => {
+        button.textContent = redaction.revealed ? 'Redact all' : 'Reveal all';
+        button.setAttribute('aria-pressed', redaction.revealed);
+    };
+    showRevealed();
+
+    // The button stays hidden until the reader has made REDACT.revealAfter guesses.
+    const showButton = (animate) => {
+        if (!button.hidden) {
+            return;
+        }
+        button.hidden = false;
+        if (animate) {
+            gsap.from(button, { opacity: 0, y: 6, duration: REDACT.duration * 2, ease: REDACT.ease });
+        }
+    };
+    if (redaction.tries >= REDACT.revealAfter || redaction.revealed) {
+        showButton(false);
+    }
 
     button.addEventListener('click', () => {
-        revealed = !revealed;
-        button.textContent = revealed ? 'Redact all' : 'Reveal all';
-        button.setAttribute('aria-pressed', revealed);
+        redaction.revealed = !redaction.revealed;
+        // "Redact all" covers everything again, so forget what was uncovered.
+        if (!redaction.revealed) {
+            uncovered.clear();
+        }
+        redactionChanged();
+        showRevealed();
 
         gsap.to(words, {
-            '--bar-opacity': revealed ? 0 : 1,
+            '--bar-opacity': redaction.revealed ? 0 : 1,
             duration: REDACT.duration,
             ease: REDACT.ease,
             stagger: { each: REDACT.stagger, from: REDACT.order },
@@ -106,13 +262,17 @@ function setupRedact(section) {
     // Typing a redacted word reveals every occurrence plus its neighbours.
     // Case-folds and reduces to a root ("Scams" -> "scam", "attacked" -> "attack")
     // so singular/plural and verb forms of a word count as the same guess.
+    // Cached: the checklists repeat the same few hundred words thousands of times.
+    const roots = new Map();
     const normalize = (text) => {
-        const doc = nlp(text).compute('root');
-        const term = doc.json()[0]?.terms[0];
-        const key = term?.root ?? term?.normal ?? text;
-        return key.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+        if (!roots.has(text)) {
+            const doc = nlp(text).compute('root');
+            const term = doc.json()[0]?.terms[0];
+            const key = term?.root ?? term?.normal ?? text;
+            roots.set(text, key.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''));
+        }
+        return roots.get(text);
     };
-    const keys = words.map((w) => normalize(w.textContent));
     const guess = controls.querySelector('.redact-guess');
 
     guess.addEventListener('keydown', (event) => {
@@ -126,8 +286,9 @@ function setupRedact(section) {
         }
 
         const hits = new Set();
-        keys.forEach((k, i) => {
-            if (k !== key) {
+        words.forEach((word, i) => {
+            // Guessing a word that is already uncovered does nothing.
+            if (normalize(word.textContent) !== key || isUncovered(word)) {
                 return;
             }
             for (let j = i - REDACT.context; j <= i + REDACT.context; j++) {
@@ -136,8 +297,13 @@ function setupRedact(section) {
                 }
             }
         });
-        if (hits.size === 0) {
-            return;
+        redaction.tries++;
+        if (hits.size > 0) {
+            redaction.correct++;
+        }
+        rememberUncovered(hits);
+        if (redaction.tries >= REDACT.revealAfter) {
+            showButton(true);
         }
 
         gsap.to([...hits], {
@@ -148,6 +314,138 @@ function setupRedact(section) {
             overwrite: 'auto'
         });
     });
+
+    // Kept in reading order, so a guess uncovers the words that sit around it.
+    // Each batch is one contiguous stretch of the page, so it is spliced in
+    // whole where its first word belongs. New words start out the way the
+    // reader left them.
+    return (added) => {
+        if (added.length === 0) {
+            return;
+        }
+        keyWords(added);
+        gsap.set(added.filter(isUncovered), { '--bar-opacity': 0 });
+
+        let lo = 0;
+        let hi = words.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (words[mid].compareDocumentPosition(added[0]) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        words.splice(lo, 0, ...added);
+        updateLocks();
+        updateStats();
+    };
+}
+
+// --- checkbox items ----------------------------------------------------------
+
+// A redacted checklist line. Checking the box lifts each word's bar and draws
+// cipher glyphs over the text; unchecking fades the glyphs back off but leaves
+// the words unredacted.
+function setupCheckItem(item) {
+    const box = item.querySelector('input[type="checkbox"]');
+    const words = wrapWords(item, 'redact');
+    setCipherVars(item);
+    item.classList.add('cipher-check');
+
+    // Words are split into chars only once the box is first checked: most never
+    // are, and splitting every item up front slows the page load. Chars start
+    // with their glyph hidden (see style.css); the bar covers the plain text meanwhile.
+    let chars = null;
+    const split = () => {
+        chars ??= words.flatMap((word) => splitIntoChars(word));
+        return chars;
+    };
+    const cipher = cipherSweeper();
+
+    // A box restored as checked (see checklist.js) starts out swept, with no animation.
+    if (box.checked) {
+        cipher.run(split(), { animate: false });
+        gsap.set(words, { '--bar-opacity': 0 });
+    }
+
+    // The box stays locked until the reader has uncovered enough of the line to
+    // know what it asks. A checked box can always be unchecked.
+    const length = (list) => list.reduce((n, word) => n + word.textContent.length, 0);
+    const total = length(words);
+    const updateLock = () => {
+        const locked = !box.checked && length(words.filter(isUncovered)) < total * REDACT.unlockShare;
+        box.disabled = locked;
+        box.title = locked ? `Uncover at least ${REDACT.unlockShare * 100}% of this step to check it off` : '';
+        item.classList.toggle('locked', locked);
+    };
+    locks.push(updateLock);
+
+    box.addEventListener('change', () => {
+        const on = box.checked;
+        const sweep = cipher.run(split(), { on });
+        if (!on) {
+            updateLock();
+            return;
+        }
+        // The bars lift as the glyphs come in. Unchecking never puts a bar back.
+        rememberUncovered(words);
+        sweep.to(words, { '--bar-opacity': 0, duration: 0.1, ease: 'none' }, 0);
+    });
+    return words;
+}
+
+// --- form fields -------------------------------------------------------------
+
+// A text field can't hold per-character spans, so each .cipher-field gets an
+// overlay that redraws its value as cipher characters in the same monospace
+// layout. Leaving the field sweeps the text into glyphs like a checked item;
+// focusing it hides the overlay so the reader edits the real text.
+function setupFieldCipher(wrapper) {
+    const field = wrapper.querySelector('input, textarea');
+    const overlay = document.createElement('span');
+    overlay.className = 'cipher-field-overlay cipher-check';
+    overlay.setAttribute('aria-hidden', 'true');
+    setCipherVars(overlay);
+    wrapper.append(overlay);
+    const cipher = cipherSweeper();
+
+    const clear = () => {
+        cipher.stop();
+        overlay.textContent = '';
+        wrapper.classList.remove('enciphered');
+    };
+
+    const encipher = (animate) => {
+        clear();
+        if (!field.value) {
+            return;
+        }
+        // The overlay is drawn from the top-left, so the field must be too.
+        field.scrollTop = 0;
+        field.scrollLeft = 0;
+        overlay.textContent = field.value;
+        const chars = splitIntoChars(overlay).filter((c) => {
+            if (/\S/.test(c.textContent)) {
+                return true;
+            }
+            delete c.dataset.glyph; // spaces and line breaks stay blank
+            return false;
+        });
+        wrapper.classList.add('enciphered');
+        cipher.run(chars, { animate, stagger: REDACT.fieldStagger });
+    };
+
+    field.addEventListener('focus', clear);
+    field.addEventListener('blur', () => encipher(true));
+    // Autofill can change a field the reader isn't in.
+    field.addEventListener('change', () => {
+        if (document.activeElement !== field) {
+            encipher(true);
+        }
+    });
+    field.form?.addEventListener('reset', clear);
+    encipher(false); // values restored by checklist.js start out enciphered
 }
 
 // --- cipher ------------------------------------------------------------------
@@ -182,7 +480,7 @@ function animateCipher(chars) {
         next: now + ((i * CIPHER.offset) % CIPHER.interval) + Math.random() * CIPHER.offsetRandom
     }));
 
-    gsap.ticker.add((time) => {
+    const tick = (time) => {
         for (const item of schedule) {
             if (time < item.next) {
                 continue;
@@ -196,7 +494,69 @@ function animateCipher(chars) {
                     { '--glyph-opacity': 1, duration: CIPHER.flash, overwrite: true });
             }
         }
-    });
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+}
+
+// Fades cipher glyphs in over a run of chars (or back out), optionally sweeping
+// from first to last, then keeps them changing. Checkbox items and form fields
+// each keep one, so a new run cancels the one before.
+function cipherSweeper() {
+    let sweep = null;
+    let stopCipher = null;
+    const stop = () => {
+        sweep?.kill();
+        sweep = null;
+        stopCipher?.();
+        stopCipher = null;
+    };
+    const start = (chars) => {
+        stopCipher = animateCipher(chars);
+    };
+
+    // Returns the sweep's timeline, for callers to add to, or null without
+    // `animate`. `stagger` is the time between one char and the next (s).
+    const run = (chars, { on = true, animate = true, stagger = 0 } = {}) => {
+        stop();
+        const end = { '--glyph-opacity': on ? 1 : 0, '--plain-opacity': on ? 0 : 1 };
+        if (!animate) {
+            gsap.set(chars, end);
+            if (on) {
+                start(chars);
+            }
+            return null;
+        }
+        sweep = gsap.timeline().to(chars, {
+            ...end,
+            duration: 0.1,
+            ease: 'none',
+            stagger: { each: stagger, from: on ? 'start' : 'end' }
+        }, 0);
+        if (on) {
+            sweep.call(() => start(chars));
+        }
+        return sweep;
+    };
+    return { run, stop };
+}
+
+// Hides something CIPHER.hoverLinger after the pointer leaves it, so it stays
+// readable for a moment; cancel() when the pointer comes back in time.
+export function linger(hide) {
+    let pending = null;
+    return {
+        cancel() {
+            pending?.kill();
+            pending = null;
+        },
+        leave() {
+            pending ??= gsap.delayedCall(CIPHER.hoverLinger, () => {
+                pending = null;
+                hide();
+            });
+        }
+    };
 }
 
 function setCipherVars(el) {
@@ -246,9 +606,16 @@ function setupHeadings() {
         }
         chars.push(...own);
 
+        // A character the pointer moves off stays unmasked for a moment.
+        const remask = own.map((c) => linger(() => c.classList.remove('unmasked')));
         const unmask = (center) => {
             own.forEach((c, i) => {
-                c.classList.toggle('unmasked', Math.abs(i - center) <= CIPHER.hoverRadius);
+                if (Math.abs(i - center) <= CIPHER.hoverRadius) {
+                    remask[i].cancel();
+                    c.classList.add('unmasked');
+                } else if (c.classList.contains('unmasked')) {
+                    remask[i].leave();
+                }
             });
         };
         heading.addEventListener('mouseover', (event) => {
@@ -264,10 +631,19 @@ function setupHeadings() {
 
 // --- init --------------------------------------------------------------------
 
-const effects = { redact: setupRedact, cipher: setupCipher };
+setupChecklists();
 
+const addRedactedWords = setupRedactControls();
 for (const section of document.querySelectorAll('[data-effect]')) {
-    effects[section.dataset.effect](section);
+    if (section.dataset.effect === 'redact') {
+        setupRedact(section, addRedactedWords);
+    } else {
+        setupCipher(section);
+    }
 }
 
+document.querySelectorAll('.cipher-field').forEach(setupFieldCipher);
+
 setupHeadings();
+
+document.documentElement.classList.remove('effects-pending');
