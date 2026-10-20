@@ -34,7 +34,7 @@ jobs:
           mkdir _site
           cp -r site/. _site/
           mkdir _site/guidebook
-          cp guidebook/index.html guidebook/app.js guidebook/chart.js guidebook/style.css guidebook/personality_test.json _site/guidebook/
+          cp guidebook/*.html guidebook/*.js guidebook/*.css _site/guidebook/
           cp -r guidebook/Courier_Prime _site/guidebook/
           mkdir -p _site/guidebook/node_modules
           cp -r guidebook/node_modules/gsap guidebook/node_modules/d3 guidebook/node_modules/compromise _site/guidebook/node_modules/
