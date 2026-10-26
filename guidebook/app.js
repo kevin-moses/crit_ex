@@ -18,7 +18,7 @@ const REDACT = {
     context: 6,            // redacted words revealed on each side of a guessed word
     revealAfter: 10,       // guesses before the "Reveal all" button appears
     fieldStagger: 0.04,    // time between one character and the next when a form field is enciphered (s)
-    unlockShare: 0.5       // share of a checkbox item's redacted text (by characters) to uncover before it can be checked
+    unlockShare: 2 / 3     // share of a checkbox item's redacted text (by characters) to uncover before it can be checked
 };
 
 export const CIPHER = {
@@ -376,7 +376,7 @@ function setupCheckItem(item) {
     const updateLock = () => {
         const locked = !box.checked && length(words.filter(isUncovered)) < total * REDACT.unlockShare;
         box.disabled = locked;
-        box.title = locked ? `Uncover at least ${REDACT.unlockShare * 100}% of this step to check it off` : '';
+        box.title = locked ? `Uncover at least ${Math.round(REDACT.unlockShare * 100)}% of this step to check it off` : '';
         item.classList.toggle('locked', locked);
     };
     locks.push(updateLock);
