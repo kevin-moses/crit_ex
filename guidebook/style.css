@@ -686,19 +686,8 @@ section h3 {
     margin: 0 0 12px;
 }
 
-.wt-dim {
-    font-size: 14px;
-    color: var(--ink-dim);
-}
-
-
-
-
-
-
 .wt-hint {
     animation: wt-pulse 1.4s ease-in-out infinite;
-    color: var(--page-ink);
 }
 
 @keyframes wt-pulse {

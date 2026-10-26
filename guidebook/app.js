@@ -9,7 +9,7 @@ import { setupChecklists, redaction, save } from './checklist.js';
 // e.g. '(#Noun|#Verb|#Adjective) && !#Pronoun' to leave "you", "I" etc. alone.
 const WORD_MATCH = '(#Noun|#Verb|#Adjective)';
 
-const REDACT = {
+export const REDACT = {
     color: '#000000',      // bar color
     duration: 0.6,         // fade time of each bar (s)
     stagger: 0.015,        // delay between one bar and the next (s)
@@ -559,6 +559,31 @@ export function linger(hide) {
     };
 }
 
+// Hovering one of `chars` unmasks it and its neighbours (CIPHER.hoverRadius); a
+// character the pointer moves off stays unmasked for a moment. Returns a
+// function that cancels any re-masking still pending.
+export function hoverUnmask(container, chars) {
+    const remask = chars.map((c) => linger(() => c.classList.remove('unmasked')));
+    const unmask = (center) => {
+        chars.forEach((c, i) => {
+            if (Math.abs(i - center) <= CIPHER.hoverRadius) {
+                remask[i].cancel();
+                c.classList.add('unmasked');
+            } else if (c.classList.contains('unmasked')) {
+                remask[i].leave();
+            }
+        });
+    };
+    container.addEventListener('mouseover', (event) => {
+        const i = chars.indexOf(event.target);
+        if (i !== -1) {
+            unmask(i);
+        }
+    });
+    container.addEventListener('mouseleave', () => unmask(Infinity));
+    return () => remask.forEach((r) => r.cancel());
+}
+
 function setCipherVars(el) {
     el.style.setProperty('--cipher-color', CIPHER.color);
     el.style.setProperty('--cipher-font', CIPHER.font);
@@ -606,25 +631,7 @@ function setupHeadings() {
         }
         chars.push(...own);
 
-        // A character the pointer moves off stays unmasked for a moment.
-        const remask = own.map((c) => linger(() => c.classList.remove('unmasked')));
-        const unmask = (center) => {
-            own.forEach((c, i) => {
-                if (Math.abs(i - center) <= CIPHER.hoverRadius) {
-                    remask[i].cancel();
-                    c.classList.add('unmasked');
-                } else if (c.classList.contains('unmasked')) {
-                    remask[i].leave();
-                }
-            });
-        };
-        heading.addEventListener('mouseover', (event) => {
-            const i = own.indexOf(event.target);
-            if (i !== -1) {
-                unmask(i);
-            }
-        });
-        heading.addEventListener('mouseleave', () => unmask(Infinity));
+        hoverUnmask(heading, own);
     }
     animateCipher(chars);
 }

@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { CIPHER, randomGlyph, linger } from './app.js';
+import { CIPHER, REDACT, randomGlyph, hoverUnmask } from './app.js';
 
 // An introductory modal that shows, with small looping GSAP demos, how the
 // page's effects work. It opens on a first visit and again from the sidebar.
@@ -8,8 +8,6 @@ import { CIPHER, randomGlyph, linger } from './app.js';
 
 const SEEN_KEY = 'masks-guide:walkthrough-seen';
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-// Redacted words uncovered on each side of a guess, as REDACT.context in app.js.
-const REDACT_CONTEXT = 6;
 
 // --- small DOM helpers -------------------------------------------------------
 
@@ -35,14 +33,16 @@ function addChars(parent, text, chars) {
     }
 }
 
-// A paragraph of words; the ones in `redacted` get a bar. Returns the paragraph
-// and its redacted word spans.
+// A word reduced to lowercase letters and digits, for comparing guesses.
+const bare = (text) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+// A paragraph of words; the ones in `redacted` (lowercase) get a bar. Returns
+// the paragraph and its redacted word spans.
 function redactedText(text, redacted) {
     const p = el('p', 'wt-text');
     const bars = [];
     for (const part of text.split(/(\s+)/)) {
-        const bare = part.replace(/[^\p{L}\p{N}]/gu, '');
-        if (redacted.includes(bare)) {
+        if (redacted.includes(bare(part))) {
             const word = el('span', 'redact', part);
             bars.push(word);
             p.append(word);
@@ -53,7 +53,9 @@ function redactedText(text, redacted) {
     return { p, bars };
 }
 
-// Cycles the glyphs of `chars` like animateCipher in app.js, minus the fade.
+// Cycles the glyphs of `chars` like animateCipher in app.js, minus the fade:
+// that one overwrites every other tween on a char, which would cancel the
+// check demo's sweep.
 function cycleGlyphs(chars, add) {
     if (reduceMotion) {
         return;
@@ -74,9 +76,15 @@ function cycleGlyphs(chars, add) {
 
 const pause = (seconds) => ({ duration: seconds });
 
+// Sets a demo's status line; `hint` makes it pulse to draw the eye.
+function say(status, text, hint = false) {
+    status.textContent = text;
+    status.classList.toggle('wt-hint', hint);
+}
+
 // --- demos -------------------------------------------------------------------
-// Each takes the stage and an `add(fn)` that registers cleanup, and returns a
-// looping timeline.
+// Each takes the stage and an `add(fn)` that registers cleanup. A demo that
+// animates on its own returns its timeline.
 
 function demoIntro(stage, add) {
     const chars = [];
@@ -85,8 +93,8 @@ function demoIntro(stage, add) {
     stage.append(h);
     cycleGlyphs(chars, add);
 
-    const { p, bars } = redactedText('Most likely your information has already been leaked.', ['Most', 'likely', 'information', 'already', 'leaked']);
-    const second = redactedText('Data brokers collect your name, address history and phone numbers.', ['Data', 'brokers', 'collect', 'name', 'address', 'history', 'phone', 'numbers']);
+    const { p, bars } = redactedText('Most likely your information has already been leaked.', ['most', 'likely', 'information', 'already', 'leaked']);
+    const second = redactedText('Data brokers collect your name, address history and phone numbers.', ['data', 'brokers', 'collect', 'name', 'address', 'history', 'phone', 'numbers']);
     stage.append(p, second.p);
     const all = [...bars, ...second.bars];
 
@@ -97,8 +105,7 @@ function demoIntro(stage, add) {
         .to({}, pause(3));
 }
 
-// Steps 2-4 are interactive: the reader does the thing, and a status line
-// answers. They return no timeline unless they animate on their own.
+// Steps 2-4 are interactive: the reader does the thing, and a status line answers.
 
 function demoHover(stage, add) {
     const chars = [];
@@ -109,56 +116,33 @@ function demoHover(stage, add) {
         addChars(span, word, chars);
         h.append(span, i === 0 ? ' ' : '');
     }
-    const status = el('div', 'wt-status wt-hint', 'Hover over the heading.');
+    const status = el('div', 'wt-status');
+    say(status, 'Hover over the heading.', true);
     stage.append(h, status);
     cycleGlyphs(chars, add);
 
-    // Same behaviour as setupHeadings in app.js: a hovered character and its
-    // neighbours unmask, and stay readable for a moment after the pointer leaves.
-    const remask = chars.map((c) => linger(() => c.classList.remove('unmasked')));
-    add(() => remask.forEach((r) => r.cancel()));
-    const unmask = (center) => {
-        chars.forEach((c, i) => {
-            if (Math.abs(i - center) <= CIPHER.hoverRadius) {
-                remask[i].cancel();
-                c.classList.add('unmasked');
-            } else if (c.classList.contains('unmasked')) {
-                remask[i].leave();
-            }
-        });
-    };
-    h.addEventListener('mouseover', (event) => {
-        const i = chars.indexOf(event.target);
-        if (i !== -1) {
-            unmask(i);
-            status.textContent = 'Move away and it scrambles again.';
-            status.classList.remove('wt-hint');
-        }
-    });
-    h.addEventListener('mouseleave', () => unmask(Infinity));
-    return null;
+    add(hoverUnmask(h, chars));
+    h.addEventListener('mouseover', () => say(status, 'Move away and it scrambles again.'));
 }
 
 function demoGuess(stage, add) {
     const { p, bars } = redactedText(
         'Data brokers collect your name, address history and phone numbers, then sell them.',
-        ['Data', 'brokers', 'collect', 'name', 'address', 'history', 'phone', 'numbers', 'sell']
+        ['data', 'brokers', 'collect', 'name', 'address', 'history', 'phone', 'numbers', 'sell']
     );
     const input = el('input', 'redact-guess');
     input.placeholder = 'Type a redacted word…';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.setAttribute('aria-label', 'Guess a redacted word');
-    const status = el('div', 'wt-status wt-hint', 'Hint: type address and press Enter.');
+    const status = el('div', 'wt-status');
+    const GUESS_HINT = 'Hint: type address and press Enter.';
+    say(status, GUESS_HINT, true);
     const again = el('button', 'wt-again', 'Try again');
     again.type = 'button';
     again.hidden = true;
     stage.append(p, input, status, again);
-    if (!reduceMotion) {
-        gsap.set(bars, { '--bar-opacity': 1 });
-    }
 
-    const bare = (text) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     input.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') {
             return;
@@ -173,31 +157,28 @@ function demoGuess(stage, add) {
             if (bare(word.textContent) !== key) {
                 return;
             }
-            for (let j = i - REDACT_CONTEXT; j <= i + REDACT_CONTEXT; j++) {
+            for (let j = i - REDACT.context; j <= i + REDACT.context; j++) {
                 if (bars[j]) {
                     hits.add(bars[j]);
                 }
             }
         });
-        status.classList.remove('wt-hint');
         if (hits.size === 0) {
-            status.textContent = 'No match. Try address.';
+            say(status, 'No match. Try address.');
             gsap.fromTo(input, { x: -6 }, { x: 0, duration: 0.4, ease: 'elastic.out(1, 0.3)' });
             return;
         }
-        status.textContent = 'Match! The word and its neighbours are uncovered.';
+        say(status, 'Match! The word and its neighbours are uncovered.');
         again.hidden = false;
         gsap.to([...hits], { '--bar-opacity': 0, duration: 0.6, ease: 'power2.out', stagger: 0.06, overwrite: 'auto' });
     });
     again.addEventListener('click', () => {
         gsap.to(bars, { '--bar-opacity': 1, duration: 0.4, overwrite: 'auto' });
-        status.textContent = 'Hint: type address and press Enter.';
-        status.classList.add('wt-hint');
+        say(status, GUESS_HINT, true);
         again.hidden = true;
         input.focus();
     });
     input.focus({ preventScroll: true });
-    return null;
 }
 
 function demoCheck(stage, add) {
@@ -209,7 +190,7 @@ function demoCheck(stage, add) {
     box.disabled = true;
     line.classList.add('locked');
     const label = el('span');
-    for (const part of 'Create a separate email address used only for removal requests.'.split(/(\s+)/)) {
+    for (const part of 'Consider using a password manager, and never store passwords in plaintext.'.split(/(\s+)/)) {
         if (/^\s*$/.test(part)) {
             label.append(part);
             continue;
@@ -237,8 +218,7 @@ function demoCheck(stage, add) {
         if (on) {
             gsap.to(bars, { '--bar-opacity': 0, duration: 0.1, ease: 'none' });
         }
-        status.classList.remove('wt-hint');
-        status.textContent = on ? 'Checked. The line turns to cipher. Click again to uncheck.' : 'Unchecked. The words stay uncovered.';
+        say(status, on ? 'Checked. The line turns to cipher. Click again to uncheck.' : 'Unchecked. The words stay uncovered.');
     });
 
     // The page locks the box until two thirds of the line (by characters) are
@@ -249,8 +229,7 @@ function demoCheck(stage, add) {
         .call(() => {
             box.disabled = false;
             line.classList.remove('locked');
-            status.textContent = 'Unlocked. Click the checkbox.';
-            status.classList.add('wt-hint');
+            say(status, 'Unlocked. Click the checkbox.', true);
         });
 }
 
@@ -317,6 +296,7 @@ const STEPS = [
 // --- modal -------------------------------------------------------------------
 
 let backdrop = null;
+let ui = null; // the dialog's parts, looked up once in build()
 let index = 0;
 let timeline = null;
 let cleanups = [];
@@ -341,8 +321,18 @@ function build() {
             </div>
         </div>`;
     document.body.append(backdrop);
+    const q = (sel) => backdrop.querySelector(sel);
+    ui = {
+        count: q('.wt-count'),
+        title: q('.wt-title'),
+        body: q('.wt-body'),
+        stage: q('.wt-stage'),
+        back: q('.wt-back'),
+        next: q('.wt-next'),
+        modal: q('.wt-modal')
+    };
 
-    const dots = backdrop.querySelector('.wt-dots');
+    const dots = q('.wt-dots');
     STEPS.forEach((step, i) => {
         const dot = el('button', 'wt-dot');
         dot.type = 'button';
@@ -351,9 +341,9 @@ function build() {
         dots.append(dot);
     });
 
-    backdrop.querySelector('.wt-close').addEventListener('click', close);
-    backdrop.querySelector('.wt-back').addEventListener('click', () => show(index - 1));
-    backdrop.querySelector('.wt-next').addEventListener('click', () => {
+    q('.wt-close').addEventListener('click', close);
+    ui.back.addEventListener('click', () => show(index - 1));
+    ui.next.addEventListener('click', () => {
         if (index === STEPS.length - 1) {
             close();
         } else {
@@ -378,28 +368,27 @@ function clearDemo() {
 function show(i) {
     index = Math.max(0, Math.min(STEPS.length - 1, i));
     const step = STEPS[index];
-    const q = (sel) => backdrop.querySelector(sel);
-    const stage = q('.wt-stage');
+    const { stage } = ui;
 
     clearDemo();
     stage.replaceChildren();
     stage.style.setProperty('--cipher-color', CIPHER.color);
     stage.style.setProperty('--cipher-font', CIPHER.font);
     stage.style.setProperty('--cipher-size', CIPHER.size);
-    stage.style.setProperty('--redact-color', '#000000');
+    stage.style.setProperty('--redact-color', REDACT.color);
 
-    q('.wt-count').textContent = `Step ${index + 1} of ${STEPS.length}`;
-    q('.wt-title').textContent = step.title;
-    q('.wt-body').textContent = step.body;
-    q('.wt-back').disabled = index === 0;
-    q('.wt-next').textContent = index === STEPS.length - 1 ? 'Start reading' : 'Next';
+    ui.count.textContent = `Step ${index + 1} of ${STEPS.length}`;
+    ui.title.textContent = step.title;
+    ui.body.textContent = step.body;
+    ui.back.disabled = index === 0;
+    ui.next.textContent = index === STEPS.length - 1 ? 'Start reading' : 'Next';
     backdrop.querySelectorAll('.wt-dot').forEach((dot, n) => {
         dot.classList.toggle('active', n === index);
         dot.setAttribute('aria-current', n === index ? 'step' : 'false');
     });
 
     if (!reduceMotion) {
-        gsap.fromTo([q('.wt-title'), q('.wt-body'), stage],
+        gsap.fromTo([ui.title, ui.body, stage],
             { opacity: 0, y: 8 },
             { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out', stagger: 0.06, overwrite: true });
     }
@@ -410,13 +399,14 @@ function show(i) {
 }
 
 function onKey(event) {
+    if (event.target instanceof HTMLInputElement && event.key.startsWith('Arrow')) {
+        return; // arrow keys belong to the guess box
+    }
     if (event.key === 'Escape') {
         close();
-    } else if (event.target instanceof HTMLInputElement && event.key.startsWith('Arrow')) {
-        // Arrow keys belong to the guess box.
-    } else if (event.key === 'ArrowRight' && index < STEPS.length - 1) {
-        show(index + 1);
-    } else if (event.key === 'ArrowLeft' && index > 0) {
+    } else if (event.key === 'ArrowRight') {
+        show(index + 1); // show() stays within the first and last step
+    } else if (event.key === 'ArrowLeft') {
         show(index - 1);
     } else if (event.key === 'Tab') {
         // Keep focus inside the dialog.
@@ -444,10 +434,10 @@ export function openWalkthrough() {
     backdrop.hidden = false;
     document.body.style.overflow = 'hidden';
     show(0);
-    backdrop.querySelector('.wt-next').focus();
+    ui.next.focus();
     if (!reduceMotion) {
         gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.25, overwrite: true });
-        gsap.fromTo('.wt-modal', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', overwrite: true });
+        gsap.fromTo(ui.modal, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', overwrite: true });
     }
 }
 
