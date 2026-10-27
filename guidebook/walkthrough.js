@@ -268,7 +268,7 @@ function demoProgress(stage) {
 const STEPS = [
     {
         title: 'Welcome',
-        body: 'This guide hides itself. Its contents are enciphered and redacted, and it\'s up to you to uncover it.',
+        body: 'This guide is hidden. Its contents are enciphered and redacted, and it\'s up to you to uncover the text underneath.',
         demo: demoIntro
     },
     {
@@ -278,12 +278,12 @@ const STEPS = [
     },
     {
         title: 'Type a word to uncover it',
-        body: 'Most of this guide is redacted. Type a hidden word into the redaction box in the sidebar and press Enter. Every copy of that word clears, along with some words around it. Wrong guesses just count as tries.',
+        body: 'Much of the content is redacted. Type a hidden word into the redaction box in the sidebar and press Enter. Every copy of that word clears, along with some words around it. Wrong guesses just count as tries.',
         demo: demoGuess
     },
     {
         title: 'Check off your steps',
-        body: 'Each removal step is a checklist item. Its box stays locked until you have uncovered two thirds of the line, so you read it first. Once it unlocks and you\'ve completed the step, check it off.',
+        body: 'This guide contains step-by-step instructions with checklists. Its checkbox stays locked until you have uncovered two thirds of the line. Once it unlocks and you\'ve completed the step, check it off.',
         demo: demoCheck
     },
     {
