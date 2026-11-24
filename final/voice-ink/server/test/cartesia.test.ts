@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+import { CartesiaSpeechToText } from '../src/cartesia.ts';
+
+test('sends raw PCM as a multipart file and parses the Cartesia response', async t => {
+  const pcm = new Uint8Array([0, 128, 255, 127]);
+  let status = 200;
+  let json = JSON.stringify({ type: 'transcript', text: 'hi there' });
+  const server = createServer(async (req, res) => {
+    assert.equal(req.method, 'POST');
+    const url = new URL(req.url!, 'http://localhost');
+    assert.equal(url.pathname, '/stt');
+    assert.equal(url.searchParams.get('encoding'), 'pcm_s16le');
+    assert.equal(url.searchParams.get('sample_rate'), '16000');
+    assert.equal(req.headers.authorization, 'Bearer test-key');
+    assert.equal(req.headers['cartesia-version'], '2026-08-14');
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const form = await new Response(Buffer.concat(chunks), { headers: { 'Content-Type': req.headers['content-type']! } }).formData();
+    assert.equal(form.get('model'), 'ink-whisper');
+    assert.equal(form.get('language'), 'en');
+    const file = form.get('file');
+    assert.ok(file instanceof File);
+    assert.equal(file.name, 'audio.pcm');
+    assert.deepEqual(new Uint8Array(await file.arrayBuffer()), pcm);
+    res.writeHead(status, { 'Content-Type': 'application/json' }).end(json);
+  }).listen(0, '127.0.0.1');
+  t.after(() => { server.close(); });
+  await once(server, 'listening');
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const stt = new CartesiaSpeechToText({ apiKey: 'test-key', baseUrl: `http://127.0.0.1:${address.port}` });
+  assert.equal(await stt.transcribe(pcm), 'hi there');
+  status = 500;
+  await assert.rejects(stt.transcribe(pcm), /500/);
+  status = 200;
+  json = '{"text":null}';
+  await assert.rejects(stt.transcribe(pcm), /text string/);
+});
