@@ -1,0 +1,4 @@
+{ "devices": [
+  { "id": "a", "name": "Ana", "peer": "b", "wakeAt": "07:00", "timeZone": "Europe/London",       "token": "change-me-a-0000000000" },
+  { "id": "b", "name": "Ben", "peer": "a", "wakeAt": "07:00", "timeZone": "America/Los_Angeles", "token": "change-me-b-0000000000" }
+] }
