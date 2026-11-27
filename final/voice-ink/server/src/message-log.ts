@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { isDeviceId } from './devices.ts';
 import type { DeviceId, Message } from './domain.ts';
 
 export class MessageLog {
@@ -21,9 +22,13 @@ export class MessageLog {
     for (const line of contents.split('\n')) {
       if (!line) continue;
       try {
-        const message = JSON.parse(line);
-        if (message && typeof message.text === 'string' && Array.isArray(message.attachments) &&
-            typeof message.from === 'string' && typeof message.to === 'string') log.#messages.push(message);
+        const row = JSON.parse(line);
+        if (!row || typeof row !== 'object') continue;
+        const { id, from, to, sentAt, text } = row;
+        if (typeof id === 'string' && isDeviceId(from) && isDeviceId(to) && typeof text === 'string' &&
+            typeof sentAt === 'string' && Number.isFinite(Date.parse(sentAt))) {
+          log.#messages.push({ id, from, to, sentAt, text });
+        }
       } catch {
         // A crash can leave an incomplete record. Keep the preceding notes readable.
       }

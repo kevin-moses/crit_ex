@@ -8,10 +8,11 @@ import { join } from 'node:path';
 import example from '../devices.example.json' with { type: 'json' };
 import { DeviceDirectory } from '../src/devices.ts';
 import { createApp } from '../src/http.ts';
+import { pairSeed } from '../src/growth.ts';
 import { MessageLog } from '../src/message-log.ts';
 import { VoiceRelay } from '../src/relay.ts';
-import { createFrameRenderer } from '../src/render/registry.ts';
-import { noticeCard } from '../src/screen.ts';
+import { renderFrame } from '../src/render/frame.ts';
+import { idleCard, noteCard, noticeCard } from '../src/screen.ts';
 
 test('two boards exchange frames, retain their own wake times, and recover after a restart', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'voice-http-'));
@@ -21,12 +22,9 @@ test('two boards exchange frames, retain their own wake times, and recover after
   const now = () => new Date(time);
   let reply: string | Error = '';
   const stt = { async transcribe() { if (reply instanceof Error) throw reply; return reply; } };
-  const attachment = { kind: 'ascii', name: 'test-art', lines: ['(*)'] } as const;
-  const art = { pick: () => attachment };
-  const renderer = createFrameRenderer();
   async function start() {
-    const relay = new VoiceRelay({ devices, now, stt, art, log: MessageLog.open(join(dir, 'log.jsonl')) });
-    const server = createApp({ devices, relay, renderer, now }).listen(0, '127.0.0.1');
+    const relay = new VoiceRelay({ devices, now, stt, log: MessageLog.open(join(dir, 'log.jsonl')) });
+    const server = createApp({ devices, relay, now }).listen(0, '127.0.0.1');
     t.after(() => { server.close(); });
     await once(server, 'listening');
     const address = server.address();
@@ -49,7 +47,11 @@ test('two boards exchange frames, retain their own wake times, and recover after
     assert.equal(bits.length, 4736);
     return bits;
   }
+  const [a, b] = devices.all();
+  const seed = pairSeed(a.id, b.id);
+  const floor = { seed, iteration: 2 };
   const aIdle = await readFrame(await get('a'), 200, 46080);
+  assert.deepEqual(aIdle, Buffer.from(renderFrame(idleCard(b, floor))));
   const bIdle = await readFrame(await get('b'), 200, 74880);
   reply = 'can you grab oat milk';
   const sent = await post('a');
@@ -63,7 +65,7 @@ test('two boards exchange frames, retain their own wake times, and recover after
   assert.deepEqual(await readFrame(await get('a'), 200, 46080), onWay);
   const history = await (await get('a', 'messages')).json();
   assert.deepEqual(history.map((m: { text: string }) => m.text), ['can you grab oat milk', 'on my way']);
-  assert.deepEqual(history[0].attachments, [attachment]);
+  assert.equal('attachments' in history[0], false);
 
   time = '2026-11-24T06:30:00Z';
   await readFrame(await get('a'), 200, 88200);
@@ -77,7 +79,7 @@ test('two boards exchange frames, retain their own wake times, and recover after
     reply = result;
     const response = await post('a', body);
     assert.equal(response.headers.get('X-Error'), code);
-    assert.deepEqual(await readFrame(response, status, 1800), Buffer.from(await renderer.render(noticeCard(code))));
+    assert.deepEqual(await readFrame(response, status, 1800), Buffer.from(renderFrame(noticeCard(code, floor))));
   }
   assert.deepEqual(await (await get('a', 'messages')).json(), beforeErrors);
   async function jsonError(response: Response, status: number, error: string) {
@@ -113,4 +115,22 @@ test('two boards exchange frames, retain their own wake times, and recover after
   origin = await start();
   assert.deepEqual(await readFrame(await get('b'), 200, 30600), last);
   assert.deepEqual(await (await fetch(origin + '/healthz')).json(), { ok: true });
+
+  time = '2026-11-27T18:12:00Z';
+  const grown = await readFrame(await get('a'), 200, 46080);
+  assert.deepEqual(grown, Buffer.from(renderFrame(noteCard(b, { text: 'on my way' }, { seed, iteration: 4 }))));
+  assert.notDeepEqual(grown, onWay);
+  reply = 'see you';
+  const afterNote = await readFrame(await post('b'), 201, 74880);
+  assert.deepEqual(afterNote, Buffer.from(renderFrame(noteCard(b, { text: reply }, { seed, iteration: 3 }))));
+  assert.deepEqual(await readFrame(await get('a'), 200, 46080), afterNote);
+
+  // Thursday in London, still Wednesday in Los Angeles. The boards count different silent days.
+  time = '2026-12-03T02:00:00Z';
+  reply = 'good night';
+  const london = await readFrame(await post('b'), 201, 46800);
+  assert.deepEqual(london, Buffer.from(renderFrame(noteCard(b, { text: reply }, { seed, iteration: 5 }))));
+  assert.deepEqual(await readFrame(await get('a'), 200, 18000), london);
+  assert.deepEqual(await readFrame(await post('b', Buffer.alloc(100)), 422, 46800),
+    Buffer.from(renderFrame(noticeCard('too_short', { seed, iteration: 4 }))));
 });

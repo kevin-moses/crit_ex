@@ -69,6 +69,6 @@ async function simulate() {
   const notes: Message[] = await history.json();
   const note = notes.find(m => m.id === sent.headers.get('X-Message-Id'));
   if (!note) throw new Error('The sent note is missing from history');
-  console.info(`${device.name}: ${note.text} [${note.attachments.map(a => a.name).join(', ') || '-'}]`);
+  console.info(`${device.name}: ${note.text}`);
 }
 simulate().catch(error => { console.error(String(error)); process.exitCode = 1; });

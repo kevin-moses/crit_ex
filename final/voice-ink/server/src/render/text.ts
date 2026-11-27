@@ -9,11 +9,8 @@ export function layoutText(ctx: SKRSContext2D, text: string, size: number, width
   ctx.font = `${size}px ${FONT}`;
   const lines: string[] = [];
   let line = '';
-  let brokeWord = false;
-  let widest = 0;
   function finishLine() {
     lines.push(line);
-    widest = Math.max(widest, ctx.measureText(line).width);
     line = '';
   }
   for (const word of text.split(/\s+/).filter(Boolean)) {
@@ -27,14 +24,13 @@ export function layoutText(ctx: SKRSContext2D, text: string, size: number, width
       line = word;
       continue;
     }
-    brokeWord = true;
     for (const char of word) {
       if (line && ctx.measureText(line + char).width > width) finishLine();
       line += char;
     }
   }
   if (line) finishLine();
-  return { lines, width: widest, brokeWord };
+  return { lines };
 }
 
 export function ellipsize(ctx: SKRSContext2D, lines: readonly string[], size: number, maxLines: number, width: number): string[] {
