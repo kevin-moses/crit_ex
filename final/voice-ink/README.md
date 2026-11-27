@@ -4,11 +4,13 @@ Hold the button on one Feather to leave a voice note for the other. The Express 
 
 | When | What appears on the board |
 | --- | --- |
-| Daily wake or power-on | The newest note from the other person, for example `Ben: On my way`, with ASCII art if it fits. Before the first note, an invitation to hold the button. |
+| Daily wake or power-on | The newest note from the other person, for example `Ben: On my way`. Before the first note, an invitation to hold the button. |
 | Successful send | Your own note, exactly as the other board will display it. It stays until the next wake or send. |
 | Failed send with a frame | A retry notice. The next daily wake restores the other person's note. |
 
 If two notes arrive between wakes, the next wake shows the newer one. The history endpoint retains both.
+
+The renderer tries 20, 16, and 14 px text. If seven lines at 14 px cannot hold the note, the last line ends with an ellipsis. The history endpoint retains the full transcript.
 
 ## Run the server
 
@@ -23,7 +25,7 @@ cp .env.example .env
 
 In `devices.json`, give each board a different random bearer token. Set the names, pairing, local wake times, and time zones. Put your Cartesia API key in `.env`. Then run `npm start`. Visit `http://localhost:3000/healthz` to check the service. For boards on separate Wi-Fi networks, point both at the same reachable HTTPS origin and terminate TLS in front of Express. Keep the API key on the server.
 
-Run one server process per data directory. It appends notes and their art to `messages.jsonl`. Keep this directory across restarts. The server sends normalized audio to Cartesia and stores the transcript. Each successful send logs up to the first 40 transcript characters.
+Run one server process per data directory. It appends notes to `messages.jsonl`. Keep this directory across restarts. The server sends normalized audio to Cartesia and stores the transcript. Each successful send logs up to the first 40 transcript characters.
 
 ### Configuration
 
@@ -35,7 +37,6 @@ Relative paths resolve from the server working directory.
 | `PORT` | `3000` |
 | `DEVICES_FILE` | `devices.json` |
 | `DATA_DIR` | `data` |
-| `ART_DIR` | `assets/ascii` |
 | `CARTESIA_VOICE_ID` | Simulator voice for `--say`. Defaults to `db6b0ed5-d5d3-463d-ae85-518a07d3c2b4`. |
 
 The device file has a top-level `devices` array. Each entry has these fields.
@@ -58,7 +59,7 @@ npm run simulate -- --from a --say 'I miss you'
 npm run simulate -- --from b --say 'On my way'
 ```
 
-The simulator synthesizes audio with Cartesia. To supply a microphone capture, replace `--say 'I miss you'` with `--pcm recording.pcm`. Add `--server https://your-host` for a remote server. The simulator saves the sender's response in `out/<from>-after-send.png` and the peer's screen in `out/<peer>.png`. It compares their bytes after each successful send and prints the stored transcript and art name.
+The simulator synthesizes audio with Cartesia. To supply a microphone capture, replace `--say 'I miss you'` with `--pcm recording.pcm`. Add `--server https://your-host` for a remote server. The simulator saves the sender's response in `out/<from>-after-send.png` and the peer's screen in `out/<peer>.png`. It compares their bytes after each successful send and prints the stored transcript.
 
 Run `npm run typecheck` and `npm test` to check the server locally. The adapter tests use a local HTTP server.
 
@@ -71,7 +72,7 @@ All device routes start with `/api/devices/:id` and require `Authorization: Bear
 | `GET /screen` | Daily timer wake or power-on | 200 and the latest incoming frame. |
 | `POST /messages` | Raw signed 16-bit little-endian mono PCM at 16 kHz. Use `application/octet-stream`. Chunked encoding is supported. Limit 512,000 bytes. | 201 and the sender's frame with `X-Message-Id`, or a notice frame with `X-Error`. |
 | `GET /screen.png` | Operator preview | 200 and an `image/png` decoded from the peer note's packed pixels. |
-| `GET /messages` | Debug history | 200 and the last 20 messages in both directions, oldest first, with attachments. |
+| `GET /messages` | Debug history | 200 and the last 20 messages in both directions, oldest first. |
 
 The public `GET /healthz` route returns `{"ok":true}`.
 
@@ -97,27 +98,3 @@ Use an ESP32 Feather, a 2.9-inch 296×128 e-ink display, an Adafruit ICS-43434 I
 4. Buffer clips in PSRAM and POST once after release. A 15-second clip occupies 480,000 bytes. On a Feather without PSRAM, buffer the start while Wi-Fi connects and send the recording as one chunked upload. Finish the request on release. Use an HTTP timeout of at least 45 seconds. A repeated POST can duplicate a note.
 5. For any frame response, including a 422 or 502, check the media type and byte count. Set `setRotation(1)`, clear the display buffer to white, and call `drawBitmap(0, 0, buf, 296, 128, EPD_BLACK)`. Perform one full refresh.
 6. Set the timer with `esp_sleep_enable_timer_wakeup((uint64_t)sleepSeconds * 1000000ULL)` and use the button as an `ext0` wake source. A send response schedules the next local wake even when it falls within the next hour. On network failure, a non-frame body, or an invalid timer header, keep the existing panel image and sleep for 3,600 seconds.
-
-## Add art
-
-Create a file such as `assets/ascii/wave.txt` with the following contents.
-
-```text
-keywords: wave, hello
- o/
- /|
- / \
-```
-
-Use 1–32 lowercase letters, digits, or hyphens for the filename stem. Use English letters for each comma-separated keyword. Art may contain 1–8 lines of up to 16 printable ASCII characters each. Leading spaces affect the picture. The next send reads the folder again. Earlier notes keep a copy of their original art.
-
-Selection uses the first matching word in the transcript. If several files match that word, the first filename in alphabetical order wins. For example, “Good morning, I miss you” selects the sun for “morning”, while “I miss you” selects the heart. Files with an empty `keywords:` line form the fallback pool. The message ID picks a repeatable fallback.
-
-The renderer tries 20, 16, and 14 px text with 28, 21, and 14 px art. A picture appears when the complete note fits beside it without splitting a word. Longer notes use the full panel width. If seven lines at 14 px cannot hold the note, the last line ends with an ellipsis. The history endpoint retains the full transcript.
-
-### Add another attachment kind
-
-1. Extend the `Attachment` union in `src/domain.ts` with a unique `kind`, a `name`, and the data needed to reproduce the asset.
-2. Implement `AttachmentRenderer<YourAttachment>`. Its async `layout` method returns blocks largest first. Each block specifies its measured width and height and a `draw(ctx, x, y)` method.
-3. Register the renderer under its kind in `src/render/registry.ts`. TypeScript checks that every kind has a renderer.
-4. Have an `ArtPicker` produce the attachment at send time. Keep its content stable after storage. The frame renderer tries the blocks in order and draws one that fits.

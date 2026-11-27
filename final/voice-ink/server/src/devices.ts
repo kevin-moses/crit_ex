@@ -4,7 +4,7 @@ import { parseTimeZone, parseWakeTime } from './schedule.ts';
 
 type AuthResult = { ok: true; device: Device } | { ok: false; reason: 'unknown_device' | 'bad_token' };
 
-function isDeviceId(value: unknown): value is DeviceId {
+export function isDeviceId(value: unknown): value is DeviceId {
   return typeof value === 'string' && /^[a-z0-9-]{1,32}$/.test(value);
 }
 function digest(token: string): Buffer {

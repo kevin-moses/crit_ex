@@ -1,83 +1,42 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
-import { PANEL, type Attachment, type Card } from '../domain.ts';
+import { PANEL, type Card } from '../domain.ts';
 import { ellipsize, FONT, layoutText } from './text.ts';
 
 export { FONT };
-export type Block = {
-  readonly width: number;
-  readonly height: number;
-  draw(ctx: SKRSContext2D, x: number, y: number): void;
-};
-export interface AttachmentRenderer<A extends Attachment> {
-  layout(ctx: SKRSContext2D, attachment: A): Promise<readonly Block[]>;
-}
-export type AttachmentRenderers = {
-  readonly [K in Attachment['kind']]: AttachmentRenderer<Extract<Attachment, { kind: K }>>;
-};
-
 const PAD = 6;
 const WIDTH = PANEL.width - 2 * PAD;
 const HEIGHT = PANEL.height - 2 * PAD;
-const ART_GAP = 10;
 const TEXT_SIZES = [20, 16, 14] as const;
 export type TextSize = typeof TEXT_SIZES[number];
 const LINE_HEIGHT = { 20: 24, 16: 19, 14: 16 } satisfies Record<TextSize, number>;
-export type CardLayout = { size: TextSize; lines: readonly string[]; textWidth: number } & (
-  | { fit: 'art'; block: Block }
-  | { fit: 'text' }
-  | { fit: 'cut' }
-);
+export type CardLayout = { fit: 'text' | 'cut'; size: TextSize; lines: readonly string[] };
 
-export function layoutCard(ctx: SKRSContext2D, text: string, blocks: readonly Block[]): CardLayout {
-  const candidates = blocks.filter(b => b.height <= HEIGHT && b.width + ART_GAP < WIDTH);
+export function layoutCard(ctx: SKRSContext2D, text: string): CardLayout {
   for (const size of TEXT_SIZES) {
-    for (const block of candidates) {
-      const { lines, width, brokeWord } = layoutText(ctx, text, size, WIDTH - block.width - ART_GAP);
-      if (!brokeWord && lines.length * LINE_HEIGHT[size] <= HEIGHT) {
-        return { fit: 'art', size, lines, textWidth: width, block };
-      }
-    }
-  }
-  for (const size of TEXT_SIZES) {
-    const { lines, width } = layoutText(ctx, text, size, WIDTH);
+    const { lines } = layoutText(ctx, text, size, WIDTH);
     const maxLines = Math.floor(HEIGHT / LINE_HEIGHT[size]);
-    if (lines.length <= maxLines) return { fit: 'text', size, lines, textWidth: width };
-    if (size === 14) return { fit: 'cut', size, lines: ellipsize(ctx, lines, size, maxLines, WIDTH), textWidth: WIDTH };
+    if (lines.length <= maxLines) return { fit: 'text', size, lines };
+    if (size === 14) return { fit: 'cut', size, lines: ellipsize(ctx, lines, size, maxLines, WIDTH) };
   }
   throw new Error('No text sizes configured');
 }
 
-export class FrameRenderer {
-  private readonly renderers: AttachmentRenderers;
-  constructor(renderers: AttachmentRenderers) { this.renderers = renderers; }
-
-  async render(card: Card): Promise<Uint8Array> {
-    const { width, height } = PANEL;
-    const ctx = createCanvas(width, height).getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, width, height);
-    const blocks = await Promise.all(card.attachments.map(attachment => {
-      const renderer: AttachmentRenderer<Attachment> = this.renderers[attachment.kind];
-      return renderer.layout(ctx, attachment);
-    }));
-    const layout = layoutCard(ctx, card.text, blocks.flat());
-    ctx.beginPath();
-    ctx.rect(PAD, PAD, WIDTH, HEIGHT);
-    ctx.clip();
-    ctx.font = `${layout.size}px ${FONT}`;
-    ctx.fillStyle = '#000';
-    ctx.textBaseline = 'top';
-    const lineHeight = LINE_HEIGHT[layout.size];
-    const top = PAD + Math.floor((HEIGHT - layout.lines.length * lineHeight) / 2);
-    layout.lines.forEach((line, i) => ctx.fillText(line, PAD, top + i * lineHeight));
-    if (layout.fit === 'art') {
-      const { block } = layout;
-      const left = PAD + Math.ceil(layout.textWidth) + ART_GAP;
-      const x = left + Math.floor((PAD + WIDTH - left - block.width) / 2);
-      block.draw(ctx, x, PAD + Math.floor((HEIGHT - block.height) / 2));
-    }
-    return packMono(ctx.getImageData(0, 0, width, height).data, width, height);
-  }
+export function renderFrame(card: Card): Uint8Array {
+  const { width, height } = PANEL;
+  const ctx = createCanvas(width, height).getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
+  const layout = layoutCard(ctx, card.text);
+  ctx.beginPath();
+  ctx.rect(PAD, PAD, WIDTH, HEIGHT);
+  ctx.clip();
+  ctx.font = `${layout.size}px ${FONT}`;
+  ctx.fillStyle = '#000';
+  ctx.textBaseline = 'top';
+  const lineHeight = LINE_HEIGHT[layout.size];
+  const top = PAD + Math.floor((HEIGHT - layout.lines.length * lineHeight) / 2);
+  layout.lines.forEach((line, i) => ctx.fillText(line, PAD, top + i * lineHeight));
+  return packMono(ctx.getImageData(0, 0, width, height).data, width, height);
 }
 
 export function packMono(rgba: Uint8ClampedArray, width: number, height: number): Uint8Array {

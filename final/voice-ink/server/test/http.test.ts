@@ -10,7 +10,7 @@ import { DeviceDirectory } from '../src/devices.ts';
 import { createApp } from '../src/http.ts';
 import { MessageLog } from '../src/message-log.ts';
 import { VoiceRelay } from '../src/relay.ts';
-import { createFrameRenderer } from '../src/render/registry.ts';
+import { renderFrame } from '../src/render/frame.ts';
 import { noticeCard } from '../src/screen.ts';
 
 test('two boards exchange frames, retain their own wake times, and recover after a restart', async t => {
@@ -21,12 +21,9 @@ test('two boards exchange frames, retain their own wake times, and recover after
   const now = () => new Date(time);
   let reply: string | Error = '';
   const stt = { async transcribe() { if (reply instanceof Error) throw reply; return reply; } };
-  const attachment = { kind: 'ascii', name: 'test-art', lines: ['(*)'] } as const;
-  const art = { pick: () => attachment };
-  const renderer = createFrameRenderer();
   async function start() {
-    const relay = new VoiceRelay({ devices, now, stt, art, log: MessageLog.open(join(dir, 'log.jsonl')) });
-    const server = createApp({ devices, relay, renderer, now }).listen(0, '127.0.0.1');
+    const relay = new VoiceRelay({ devices, now, stt, log: MessageLog.open(join(dir, 'log.jsonl')) });
+    const server = createApp({ devices, relay, now }).listen(0, '127.0.0.1');
     t.after(() => { server.close(); });
     await once(server, 'listening');
     const address = server.address();
@@ -63,7 +60,7 @@ test('two boards exchange frames, retain their own wake times, and recover after
   assert.deepEqual(await readFrame(await get('a'), 200, 46080), onWay);
   const history = await (await get('a', 'messages')).json();
   assert.deepEqual(history.map((m: { text: string }) => m.text), ['can you grab oat milk', 'on my way']);
-  assert.deepEqual(history[0].attachments, [attachment]);
+  assert.equal('attachments' in history[0], false);
 
   time = '2026-11-24T06:30:00Z';
   await readFrame(await get('a'), 200, 88200);
@@ -77,7 +74,7 @@ test('two boards exchange frames, retain their own wake times, and recover after
     reply = result;
     const response = await post('a', body);
     assert.equal(response.headers.get('X-Error'), code);
-    assert.deepEqual(await readFrame(response, status, 1800), Buffer.from(await renderer.render(noticeCard(code))));
+    assert.deepEqual(await readFrame(response, status, 1800), Buffer.from(renderFrame(noticeCard(code))));
   }
   assert.deepEqual(await (await get('a', 'messages')).json(), beforeErrors);
   async function jsonError(response: Response, status: number, error: string) {

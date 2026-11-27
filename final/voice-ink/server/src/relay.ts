@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { ArtPicker } from './art.ts';
 import { normalizePcm } from './audio.ts';
 import type { DeviceDirectory } from './devices.ts';
 import type { Card, Device, Message, SendError } from './domain.ts';
@@ -18,7 +17,6 @@ export class RelayError extends Error {
 type RelayDeps = {
   devices: DeviceDirectory;
   log: MessageLog;
-  art: ArtPicker;
   stt: SpeechToText;
   now?: () => Date;
   newId?: () => string;
@@ -29,7 +27,7 @@ export class VoiceRelay {
 
   async send(from: Device, pcm: Uint8Array): Promise<Message> {
     if (pcm.byteLength < 9600) throw new RelayError('too_short');
-    const { log, art, stt, newId = randomUUID, now = () => new Date() } = this.#deps;
+    const { log, stt, newId = randomUUID, now = () => new Date() } = this.#deps;
     let transcript: string;
     try {
       transcript = await stt.transcribe(normalizePcm(pcm));
@@ -39,10 +37,9 @@ export class VoiceRelay {
     const text = transcript.replace(/\s+/g, ' ').trim();
     if (!text) throw new RelayError('no_speech');
     const id = newId();
-    const attachment = art.pick(text, id);
-    const message = { id, from: from.id, to: from.peer, sentAt: now().toISOString(), text, attachments: attachment ? [attachment] : [] };
+    const message = { id, from: from.id, to: from.peer, sentAt: now().toISOString(), text };
     log.add(message);
-    console.info(`${from.id} -> ${from.peer} ${JSON.stringify(text.slice(0, 40))} [${attachment?.name ?? '-'}]`);
+    console.info(`${from.id} -> ${from.peer} ${JSON.stringify(text.slice(0, 40))}`);
     return message;
   }
 

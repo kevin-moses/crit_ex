@@ -6,14 +6,14 @@ export const NOTICES = {
   stt_failed: "Couldn't send. Try again later.",
 } satisfies Record<SendError, string>;
 
-export function noteCard(sender: Pick<Device, 'name'>, message: Pick<Message, 'text' | 'attachments'>): Card {
-  return { text: `${sender.name}: ${message.text}`, attachments: message.attachments };
+export function noteCard(sender: Pick<Device, 'name'>, message: Pick<Message, 'text'>): Card {
+  return { text: `${sender.name}: ${message.text}` };
 }
 
 export function idleCard(peer: Pick<Device, 'name'>): Card {
-  return { text: `Hold the button to talk to ${peer.name}.`, attachments: [] };
+  return { text: `Hold the button to talk to ${peer.name}.` };
 }
 
 export function noticeCard(error: SendError): Card {
-  return { text: NOTICES[error], attachments: [] };
+  return { text: NOTICES[error] };
 }
