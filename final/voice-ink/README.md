@@ -12,6 +12,14 @@ If two notes arrive between wakes, the next wake shows the newer one. The histor
 
 The renderer tries 20, 16, and 14 px text. If seven lines at 14 px cannot hold the note, the last line ends with an ellipsis. The history endpoint retains the full transcript.
 
+## The vines
+
+Each pair starts with a small shoot at iteration 2. After the first note, every complete local day without a note from either person adds one iteration, up to 30. Through iteration 12, the vines frame the text and leave it clear. Then tendrils grow across the words. By about iteration 28, they cover most of the note.
+
+The first note on a local day keeps half the growth above 2, rounded down. After a month of silence, a note brings the vines from 30 to 16. A note the next day brings them to 9. More notes on the same day leave the vines at that day's level. To make a note clear the vines back to 2, set `KEEP` to `0` in `server/src/growth.ts`.
+
+Each board uses its own `timeZone`. A note counts immediately, and a completed silent day shows at the next morning's wake. When the boards count a note on different dates, their iterations can differ. A successful send shows the recipient's view. The board uses its existing firmware to draw each 4,736-byte frame.
+
 ## Run the server
 
 Install Node.js 24 or later. From the repository root, run the following commands.
@@ -52,7 +60,7 @@ The device file has a top-level `devices` array. Each entry has these fields.
 
 ### Preview and simulate
 
-Use `npm run preview` to render example screens into `out/preview-*.png`. To exercise both directions against the running server, open another terminal in `final/voice-ink/server`.
+Use `npm run preview` to render example screens into `out/preview-*.png`. The six `out/preview-iteration-*.png` files show the same note at iterations 2, 12, 16, 20, 25, and 30. To exercise both directions against the running server, open another terminal in `final/voice-ink/server`.
 
 ```sh
 npm run simulate -- --from a --say 'I miss you'
