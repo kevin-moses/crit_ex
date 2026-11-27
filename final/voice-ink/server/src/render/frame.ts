@@ -1,5 +1,7 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 import { PANEL, type Card } from '../domain.ts';
+import { FULL } from '../growth.ts';
+import { drawVines, growVines } from './vines.ts';
 import { ellipsize, FONT, layoutText } from './text.ts';
 
 export { FONT };
@@ -35,8 +37,14 @@ export function renderFrame(card: Card): Uint8Array {
   ctx.textBaseline = 'top';
   const lineHeight = LINE_HEIGHT[layout.size];
   const top = PAD + Math.floor((HEIGHT - layout.lines.length * lineHeight) / 2);
-  layout.lines.forEach((line, i) => ctx.fillText(line, PAD, top + i * lineHeight));
-  return packMono(ctx.getImageData(0, 0, width, height).data, width, height);
+  const keepOut = layout.lines.map((line, i) => {
+    const y = top + i * lineHeight;
+    ctx.fillText(line, PAD, y);
+    return { x: PAD, y, w: Math.ceil(ctx.measureText(line).width), h: lineHeight };
+  });
+  const bits = packMono(ctx.getImageData(0, 0, width, height).data, width, height);
+  drawVines(bits, growVines(card.growth.seed), card.growth.iteration / FULL, keepOut);
+  return bits;
 }
 
 export function packMono(rgba: Uint8ClampedArray, width: number, height: number): Uint8Array {

@@ -55,12 +55,12 @@ export function createApp({ devices, relay, now }: Dependencies): express.Expres
     try {
       const message = await relay.send(device, req.body);
       res.set('X-Message-Id', message.id);
-      frame(res, device, noteCard(device, message), 201, 'messages');
+      frame(res, device, noteCard(device, message, relay.growth(devices.get(device.peer)!)), 201, 'messages');
     } catch (error) {
       if (!(error instanceof RelayError)) throw error;
       if (error.cause) console.error(error.cause);
       res.set('X-Error', error.code);
-      frame(res, device, noticeCard(error.code), STATUS[error.code], 'messages');
+      frame(res, device, noticeCard(error.code, relay.growth(device)), STATUS[error.code], 'messages');
     }
   });
 

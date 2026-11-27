@@ -21,8 +21,12 @@ test('two boards read their peer’s newest note across sends, errors and restar
     if (reply instanceof Error) throw reply;
     return reply;
   } };
-  const open = () => new VoiceRelay({ devices, log: MessageLog.open(path), stt });
+  let time = '2026-11-24T18:12:00Z';
+  const open = () => new VoiceRelay({ devices, log: MessageLog.open(path), now: () => new Date(time), stt });
   const relay = open();
+  const growth = relay.screen(a).growth;
+  assert.equal(growth.iteration, 2);
+  assert.deepEqual(relay.screen(b).growth, growth);
   const pcm = Buffer.alloc(9600);
   for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(i % 4 ? -1000 : 1000, i);
   assert.equal(relay.screen(a).text, 'Hold the button to talk to Ben.');
@@ -33,7 +37,7 @@ test('two boards read their peer’s newest note across sends, errors and restar
   const milk = await relay.send(a, pcm);
   assert.ok(Buffer.from(calls[0]).readInt16LE(0) > 29000);
   assert.equal(relay.screen(a).text, 'Hold the button to talk to Ben.');
-  assert.deepEqual(relay.screen(b), { text: 'Ana: can you grab oat milk' });
+  assert.deepEqual(relay.screen(b), { text: 'Ana: can you grab oat milk', growth });
   reply = 'on my way';
   const onWay = await relay.send(b, pcm);
   assert.equal(relay.screen(a).text, 'Ben: on my way');
@@ -59,4 +63,17 @@ test('two boards read their peer’s newest note across sends, errors and restar
   reply = 'thanks';
   const thanks = await reopened.send(b, pcm);
   assert.deepEqual(open().conversation(a, 20), [milk, onWay, bread, legacy, thanks]);
+
+  function checkGrowth(iteration: number) {
+    for (const device of [a, b]) {
+      assert.deepEqual(reopened.screen(device).growth, { seed: growth.seed, iteration });
+    }
+  }
+  checkGrowth(2);
+  time = '2026-11-25T18:12:00Z';
+  checkGrowth(2);
+  time = '2026-11-27T18:12:00Z';
+  checkGrowth(4);
+  await reopened.send(a, pcm);
+  checkGrowth(3);
 });

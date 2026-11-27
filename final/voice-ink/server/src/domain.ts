@@ -23,6 +23,7 @@ export type Message = {
   readonly text: string;
 };
 
-export type Card = { readonly text: string };
+export type Growth = { readonly seed: number; readonly iteration: number };
+export type Card = { readonly text: string; readonly growth: Growth };
 
 export type SendError = 'too_short' | 'no_speech' | 'stt_failed';

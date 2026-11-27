@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import type { Card } from '../src/domain.ts';
+import type { Card, DeviceId } from '../src/domain.ts';
+import { pairSeed } from '../src/growth.ts';
 import { bitsToPng, renderFrame } from '../src/render/frame.ts';
 
 const examples: [string, string][] = [
@@ -19,12 +20,19 @@ const examples: [string, string][] = [
 ];
 
 export function previewCards(): Map<string, Card> {
-  return new Map(examples.map(([name, text]) => [name, { text }]));
+  const growth = { seed: pairSeed('a' as DeviceId, 'b' as DeviceId), iteration: 12 };
+  return new Map(examples.map(([name, text]) => [name, { text, growth }]));
 }
 
 if (import.meta.main) {
   mkdirSync('out', { recursive: true });
-  for (const [name, card] of previewCards()) {
+  const cards = previewCards();
+  for (const [name, card] of cards) {
     writeFileSync(`out/preview-${name}.png`, bitsToPng(renderFrame(card)));
+  }
+  const note = cards.get('onway')!;
+  for (const iteration of [2, 12, 16, 20, 25, 30]) {
+    const frame = renderFrame({ ...note, growth: { ...note.growth, iteration } });
+    writeFileSync(`out/preview-iteration-${iteration}.png`, bitsToPng(frame));
   }
 }
